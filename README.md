@@ -7,12 +7,12 @@ The `Array Eloquent Driver` package provides an array-based implementation of La
 To install the package, use Composer:
 
 ``` bash
-  composer require alva/array-eloquent-driver
+composer require alva/array-eloquent-driver
 ```
 
 ## Configuration
 
-After installing the package, you need to register the service provider in your `config/app.php` file:
+After installing the package, you need to register the service provider in your `bootstrap/providers.php` file:
 
 ```php
 'providers' => [
