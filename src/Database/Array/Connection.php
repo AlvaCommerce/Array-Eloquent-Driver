@@ -4,6 +4,7 @@ namespace Alva\ArrayEloquentDriver\Database\Array;
 
 use Illuminate\Database\Connection as ConnectionBase;
 use RuntimeException;
+use Alva\ArrayEloquentDriver\Helpers\SqlParser;
 
 class Connection extends ConnectionBase
 {
@@ -31,10 +32,15 @@ class Connection extends ConnectionBase
             unset($params['resolverClassName']);
             unset($params['resolverHandler']);
 
-            $rows = $resolverClass->{$resolverHandler}(...$params);
+            $dependencies = [];
+
+            foreach ((new \ReflectionMethod($resolverClass, $resolverHandler))->getParameters() as $parameter) {
+                $dependencies[$parameter->getName()] = $params[$parameter->getName()] ?? null;
+            }
+
+            $rows = $resolverClass->{$resolverHandler}(...$dependencies);
 
             $select = $this->parseSelectQuery($query);
-
 
             if (in_array('count(*) as aggregate', $select)) {
                 foreach ($rows as &$row) {
@@ -54,21 +60,28 @@ class Connection extends ConnectionBase
 
     protected function parseQuery(string $query, array $bindings): array
     {
-        preg_match_all('/["\']?([\w]+)["\']?\s+(=|IN)\s*(\(\s*\?(?:\s*,\s*\?)*\s*\)|\?)/i', $query, $matches);
+        $parser = new SqlParser($query);
+
+        $wheres = $parser->getWhereFields();
+        $limitAndOffset = $parser->getLimitAndOffset();
 
         $final = [];
         $bindingIndex = 0;
 
-        foreach ($matches[1] as $colIndex => $column) {
-            $varName = lcfirst(str_replace(' ', '', ucwords(str_replace('_', ' ', $column))));
-            if (str_contains(strtolower($matches[2][$colIndex]), 'in')) {
-                $final[$varName] = array_slice($bindings, $bindingIndex, substr_count($matches[3][$bindingIndex], '?'));
+        foreach ($wheres as $where) {
+            $varName = lcfirst(str_replace(' ', '', ucwords(str_replace('_', ' ', $where['key']))));
+            if (str_contains(strtolower($where['operation']), 'in')) {
+                $final[$varName] = array_slice($bindings, $bindingIndex, substr_count($where['value'], '?'));
                 $bindingIndex += count($final[$varName]);
             } else {
                 $final[$varName] = $bindings[$bindingIndex];
                 $bindingIndex++;
             }
         }
-        return $final;
+
+        return [
+            ...$final,
+            ...$limitAndOffset
+        ];
     }
 }
