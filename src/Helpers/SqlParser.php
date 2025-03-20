@@ -42,15 +42,15 @@ class SqlParser
         $query = $this->getQuery();
         $whereFields = [];
 
-        if (preg_match_all('#WHERE[\s]+(.*?)(?:(?<=\w)[\s]+(AND|OR)[\s]+|$)#i', $query, $matches)) {
+        if (preg_match_all('#WHERE[\s]+(.*?)(?:(?<=\w)[\s]+(AND|OR)[\s]+|(?=ORDER\s+BY|LIMIT|OFFSET|GROUP\s+BY|$))#i', $query, $matches)) {
             if (str_contains(strtolower($matches[1][0] ?? $matches[1]), ' and ')) {
                 $matches[1] = explode(' and ', strtolower($matches[1][0] ?? $matches[1]));
             }
 
             foreach ($matches[1] as $condition) {
                 if (
-                    preg_match('#["\']?([\w.]+)["\']?[\s]*(=|<>|!=|<|>|<=|>=|LIKE|IN)[\s]*([\w\'"]+)#i', $condition, $fieldMatches)
-                    || preg_match('/["\']?([\w]+)["\']?\s*(=|<>|!=|<|>|<=|>=|LIKE|IN)\s*(\(\s*\?(?:\s*,\s*\?)*\s*\)|\?|\d+)/i', $condition, $fieldMatches)
+                    preg_match('/["\']?([\w]+)["\']?\s*(=|<>|!=|<|>|<=|>=|LIKE|IN)\s*(\(\s*\?(?:\s*,\s*\?)*\s*\)|\?|\d+)/i', $condition, $fieldMatches)
+                    || preg_match('#["\']?([\w.]+)["\']?[\s]*(=|<>|!=|<|>|<=|>=|LIKE|IN)[\s]*([\w\'"]+)#i', $condition, $fieldMatches)
                 ) {
                     $whereFields[] = [
                         'key' => $fieldMatches[1],
