@@ -8,7 +8,7 @@ use Alva\ArrayEloquentDriver\Helpers\SqlParser;
 
 class Connection extends ConnectionBase
 {
-    public function select($query, $bindings = [], $useReadPdo = true)
+    public function select($query, $bindings = [], $useReadPdo = true, array $fetchUsing = [])
     {
         // Check query.
         if (!$query) {
