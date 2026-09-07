@@ -40,12 +40,14 @@ class Connection extends ConnectionBase
 
             $rows = $resolverClass->{$resolverHandler}(...$dependencies);
 
-            $select = $this->parseSelectQuery($query);
+            if ($aggregate = $this->parseAggregate($query)) {
+                $value = $this->computeAggregate($aggregate, $rows);
 
-            if (in_array('count(*) as aggregate', $select)) {
                 foreach ($rows as &$row) {
-                    $row['aggregate'] = count($rows);
+                    $row['aggregate'] = $value;
                 }
+
+                unset($row);
             }
 
             return $rows;
@@ -54,8 +56,59 @@ class Connection extends ConnectionBase
 
     protected function parseSelectQuery(string $query): array
     {
-        preg_match('/select\s+(.*?)\s+from/is', $query, $select);
-        return is_array($select[1]) ? $select[1] : explode(',', $select[1]);
+        if (!preg_match('/\bselect\s+(?:distinct\s+)?(.*?)\s+from\b/is', $query, $select)) {
+            return [];
+        }
+
+        return array_map('trim', explode(',', $select[1]));
+    }
+
+    /**
+     * Detect an aggregate column such as `count(*) as aggregate`.
+     *
+     * Laravel 13 wraps the alias (`count(*) as "aggregate"`), so the alias and
+     * the aggregated column may be quoted with any of " ' ` [].
+     */
+    protected function parseAggregate(string $query): ?array
+    {
+        foreach ($this->parseSelectQuery($query) as $column) {
+            if (preg_match('/^(count|sum|avg|min|max)\s*\(\s*(distinct\s+)?(.+?)\s*\)\s+as\s+["\'`\[]?aggregate["\'`\]]?$/is', $column, $matches)) {
+                return [
+                    'function' => strtolower($matches[1]),
+                    'distinct' => $matches[2] !== '',
+                    'column' => trim($matches[3], '"\'`[]'),
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Compute an aggregate value over the rows returned by the resolver.
+     */
+    protected function computeAggregate(array $aggregate, array $rows): int|float|null
+    {
+        if ($aggregate['column'] === '*') {
+            $values = array_fill(0, count($rows), 1);
+        } else {
+            $values = array_filter(
+                array_column($rows, $aggregate['column']),
+                static fn ($value): bool => $value !== null
+            );
+        }
+
+        if ($aggregate['distinct']) {
+            $values = array_unique($values, SORT_REGULAR);
+        }
+
+        return match ($aggregate['function']) {
+            'count' => count($values),
+            'sum' => array_sum($values),
+            'avg' => $values === [] ? null : array_sum($values) / count($values),
+            'min' => $values === [] ? null : min($values),
+            'max' => $values === [] ? null : max($values),
+        };
     }
 
     protected function parseQuery(string $query, array $bindings): array
